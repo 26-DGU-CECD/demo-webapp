@@ -355,7 +355,7 @@ function tplDashboard(v) {
         <div class="core${m.on ? ' on' : ''}" style="background:${m.bg};color:${m.fg};border:${m.border}">${m.id}</div></div>`).join('')}
     </div>
     <div class="big">${act.length ? `<span class="big-n" style="color:${C.fg}">${act.map(n => n.id).join(' + ')}</span>` : ''}<span class="big-s">${act.length ? act.map(n => n.ko).join(' · ') : (offline ? '연결 대기' : '대기 중')}</span></div>
-    <div class="legend"><span><span class="lg" style="background:${C.fg}"></span>진동 확인 (하드웨어)</span><span><span class="lg" style="border:2px dashed ${C.fg}"></span>명령 전송됨</span><span><span class="lg" style="background:#E3E7EC"></span>비활성</span><span>${act.length ? '강도 ' + Math.round(act[0].intensity * 100) + '% · ' + (allAck ? '확인됨' : '확인 대기') : ''}</span></div>`;
+    <div class="legend"><span><span class="ldot" style="background:${C.fg}"></span>진동 확인 (하드웨어)</span><span><span class="ldot" style="border:2px dashed ${C.fg}"></span>명령 전송됨</span><span><span class="ldot" style="background:#E3E7EC"></span>비활성</span><span>${act.length ? '강도 ' + Math.round(act[0].intensity * 100) + '% · ' + (allAck ? '확인됨' : '확인 대기') : ''}</span></div>`;
 
   const sum1 = det ? esc(cur.name) : offline ? 'Raspberry Pi 연결 대기 중' : '소리 인식';
   const sum2 = det ? (cur.dirValid ? dirName(cur.deg) + ' ' + cur.deg + '°' : '방향 확인 중') : offline ? '' : '방향 추정';
