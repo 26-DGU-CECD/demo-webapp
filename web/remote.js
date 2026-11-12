@@ -51,11 +51,20 @@ function patch(obj) {
 function addLog(text) { state.log = [{ time: now(), text }].concat(state.log).slice(0, 6); }
 
 // ── 채널 ──
+// 중계 서버(server/server.js)로 서빙되면 /api/send 로도 보냄. 탭 간 BC/localStorage 경로는 예비로 유지.
+const API = /^https?:$/.test(location.protocol) ? '' : null;
 function bus(msg) {
   msg = Object.assign({ _id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), _from: 'remote' }, msg);
   try { if (bc) bc.postMessage(msg); } catch (e) { /* noop */ }
   try { localStorage.setItem('miimo-remote-bus', JSON.stringify(msg)); } catch (e) { /* noop */ }
+  if (API !== null && (msg.type === 'detection' || msg.type === 'control')) {
+    fetch(API + '/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then(j => markMonitors(j.monitors))
+      .catch(err => { addLog('전송 실패 · ' + err.message); render(); });
+  }
 }
+function markMonitors(n) { if (n > 0) { const was = isOnline(); state.lastPong = Date.now(); if (!was) render(); } }
 function onBus(m) {
   if (!m || m._from !== 'monitor' || seen.includes(m._id)) return;
   seen.push(m._id); if (seen.length > 40) seen.shift();
@@ -209,7 +218,11 @@ function init() {
   bus({ type: 'ping' });
   // 재렌더는 연결 상태가 바뀔 때만 (슬라이더 드래그 중 끊김 방지)
   let was = isOnline();
-  setInterval(() => { bus({ type: 'ping' }); const on = isOnline(); if (on !== was) { was = on; render(); } }, 1500);
+  setInterval(() => {
+    bus({ type: 'ping' });
+    if (API !== null) fetch(API + '/api/status').then(r => r.json()).then(j => markMonitors(j.monitors)).catch(() => { /* 서버 응답 없음 → 4초 뒤 오프라인 표시 */ });
+    const on = isOnline(); if (on !== was) { was = on; render(); }
+  }, 1500);
   render();
 }
 init();
