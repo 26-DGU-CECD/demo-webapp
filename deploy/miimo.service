@@ -1,0 +1,31 @@
+# /etc/systemd/system/miimo.service
+# miimo relay: public dashboard on :80, tailnet-only remote on 127.0.0.1:8787
+[Unit]
+Description=miimo relay server (dashboard + remote)
+# tailscaled must be up so `tailscale serve` can forward to the remote listener
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=miimo
+Group=miimo
+WorkingDirectory=/opt/miimo/server
+EnvironmentFile=/etc/miimo/relay.env
+ExecStart=/usr/bin/node /opt/miimo/server/server.js
+Restart=always
+RestartSec=2
+
+# Bind to port 80 without root (alternative: setcap, see DEPLOY.md)
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/opt/miimo
+
+[Install]
+WantedBy=multi-user.target
