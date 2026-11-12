@@ -57,8 +57,10 @@ const state = {
   sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
 };
 let seq = 0, ws = null, bc = null, burst = null, room = null, lv = null;
+// 중계 서버(server/server.js)로 서빙될 때: ws://<host>/ws 자동 접속 + 백오프 재연결
+let relayUrl = null, wantWs = false, retry = 0;
 const seen = [];
-const T = { hold: 0, ack: 0, auto: 0, mic: 0 };
+const T = { hold: 0, ack: 0, auto: 0, mic: 0, reconnect: 0 };
 const app = document.getElementById('app');
 
 function setState(patch) {
@@ -128,6 +130,8 @@ function applyAck(ids) {
 }
 function onMessage(m) {
   if (!m || typeof m !== 'object') return;
+  if (m._from === 'remote') { onRemote(m); return; }      // 중계 서버가 전달한 리모컨 메시지
+  if (m.type === 'snapshot') { applySnapshot(m); return; } // 접속 직후 서버가 보내는 현재 상태
   if (m.type === 'detection') ingest(m, 'live');
   else if (m.type === 'motor_state') { applyAck((m.motors || []).filter(x => x.active).map(x => x.id)); setState({ lastRx: new Date() }); }
   else if (m.type === 'status') setState(s => ({
@@ -177,24 +181,55 @@ function onRemote(m) {
     return;
   }
   if (m.type !== 'detection') return;
+  const r = remoteMsg(m);
+  ingest(r.msg, 'live', r.autoAck);
+}
+// 리모컨 메시지 → 표준 detection 메시지 (motors 없으면 현재 posMap 으로 채움)
+function remoteMsg(m) {
   const msg = Object.assign({}, m); delete msg._id; delete msg._from;
   const autoAck = msg.ack !== false; delete msg.ack;
   const inten = typeof msg.intensity === 'number' ? msg.intensity : 0.8; delete msg.intensity;
   if (!Array.isArray(msg.motors)) msg.motors = motorsFor(((Math.round(msg.direction_deg || 0) % 360) + 360) % 360, inten, msg.direction_valid !== false);
-  ingest(msg, 'live', autoAck);
+  return { msg, autoAck };
+}
+// 서버 snapshot: 과거 기록은 조용히 복원, 마지막 감지가 아직 표시 시간 안이면 화면에도 띄움
+function applySnapshot(m) {
+  const hold = CFG.holdSeconds * 1000;
+  const age = m.last && typeof m.last._at === 'number' ? (m.now || Date.now()) - m.last._at : Infinity;
+  const fresh = age < hold;
+  const items = (Array.isArray(m.history) ? m.history : []).filter(x => x && x.type === 'detection' && !(fresh && x._id === m.last._id));
+  const restored = items.map(x => {
+    const r = remoteMsg(x), ev = normalize(r.msg, 'live');
+    if (r.autoAck) ev.ackIds = ev.motors.filter(a => a.active).map(a => a.id);
+    return ev;
+  });
+  if (restored.length) setState(s => ({ history: restored.concat(s.history).slice(0, 200) }));
+  if (fresh) {
+    onRemote(m.last);
+    clearTimeout(T.hold);
+    T.hold = setTimeout(() => setState({ phase: 'idle', ack: {} }), hold - age);
+  }
 }
 
 // ── WebSocket (Live Mode) ──
 function connect() {
   disconnect();
+  wantWs = true;
   let sock;
-  try { sock = new WebSocket(state.wsUrl); } catch (e) { setState({ ws: 'error' }); return; }
+  try { sock = new WebSocket(state.wsUrl); } catch (e) { setState({ ws: 'error' }); scheduleReconnect(); return; }
   ws = sock; setState({ ws: 'connecting' });
-  sock.onopen = () => { if (ws === sock) setState({ ws: 'open' }); };
+  sock.onopen = () => { if (ws === sock) { retry = 0; setState({ ws: 'open', linked: true }); } };
   sock.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (err) { return; } onMessage(m); };
-  sock.onclose = () => { if (ws === sock) { ws = null; setState(s => ({ ws: s.ws === 'open' ? 'idle' : 'error', pico: null, micLevels: null, stream: null })); } };
+  sock.onclose = () => { if (ws === sock) { ws = null; setState(s => ({ ws: s.ws === 'open' ? 'idle' : 'error', pico: null, micLevels: null, stream: null })); scheduleReconnect(); } };
+}
+function scheduleReconnect() {
+  if (!wantWs) return;
+  const delay = Math.min(15000, 1000 * Math.pow(2, retry)); retry++;
+  clearTimeout(T.reconnect);
+  T.reconnect = setTimeout(() => { if (wantWs && !ws) connect(); }, delay);
 }
 function disconnect() {
+  wantWs = false; clearTimeout(T.reconnect);
   const sock = ws; ws = null;
   if (sock) { try { sock.close(); } catch (e) { /* noop */ } }
   setState({ ws: 'idle', pico: null, micLevels: null, stream: null, linked: false });
@@ -206,7 +241,8 @@ function setMode(mode) {
   if (mode === state.mode) return;
   clearTimeout(T.hold); clearTimeout(T.ack); setAuto(false);
   if (mode === 'sim') disconnect();
-  setState(Object.assign({ mode, phase: 'idle', ack: {} }, mode === 'live' ? { ws: 'open', pico: true, stream: '정상', linked: true } : {}));
+  setState(Object.assign({ mode, phase: 'idle', ack: {} }, mode === 'live' && !relayUrl ? { ws: 'open', pico: true, stream: '정상', linked: true } : {}));
+  if (mode === 'live' && relayUrl) connect();
 }
 function setAuto(on) {
   clearInterval(T.auto);
@@ -588,6 +624,11 @@ function init() {
   const q = new URLSearchParams(location.search);
   if (['dashboard', 'history', 'device'].includes(q.get('page'))) state.page = q.get('page');
   if (q.get('auto') === '1') CFG.autoStart = true;
+  // http(s)로 서빙되면 같은 호스트의 중계 서버 /ws 에 자동 접속. file:// 로 열면 기존 동작 그대로.
+  if (/^https?:$/.test(location.protocol)) {
+    relayUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    state.wsUrl = relayUrl; state.ws = 'idle'; state.pico = null; state.linked = false;
+  }
   const seeds = [['glass_break', 262, 0.91, 40], ['car_horn', 58, 0.93, 95], ['knock', 184, 0.84, 170], ['water_running', 120, 0.78, 260], ['baby_cry', 318, 0.89, 420]];
   state.history = seeds.map(a => {
     const ev = normalize(simMsg({ label: a[0], deg: a[1], conf: a[2] }, new Date(Date.now() - a[3] * 1000)), 'live');
@@ -599,5 +640,6 @@ function init() {
   T.mic = setInterval(micTick, 100);
   render();
   if (CFG.autoStart) { setMode('sim'); setAuto(true); }
+  else if (relayUrl) connect();
 }
 init();
