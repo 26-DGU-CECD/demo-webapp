@@ -415,27 +415,8 @@ function tplDashboard(v) {
       </div>
       <div class="summary" style="background:${C.bg};color:${C.tx}"><span>${sum1}</span><span class="ms" style="opacity:${arrowOp}">arrow_forward</span><span>${sum2}</span><span class="ms" style="opacity:${arrowOp}">arrow_forward</span><span>${sum3}</span></div>
     </section>
-    <div class="row2">
-      <section class="card" style="flex:2.2 1 620px;min-width:0">
-        <div class="card-h"><span class="h2">최근 감지</span><span class="cnt">${hist.length}건</span><button class="link-btn" data-act="tab" data-arg="history">전체 기록<span class="ms">chevron_right</span></button></div>
-        <div class="tbl">${hist.slice(0, 5).map(e => rowTpl(e, null, false)).join('')}
-          ${hist.length ? '' : `<div class="empty"><img src="assets/miimo.png" alt=""><span>아직 감지 기록이 없어요</span></div>`}</div>
-      </section>
-      <section class="card" style="flex:1 1 320px;min-width:0">
-        <div class="card-h" style="margin-bottom:14px"><span class="h2">시스템 상태</span><span class="cnt" style="margin-left:auto">${micTag(v)}</span></div>
-        <div class="sys-grid">${v.mics.map(m => micTpl(m, false)).join('')}</div>
-        ${sysRows(v).map(r => `<div class="kv"><span>${r[0]}</span><span style="color:${/없음|—|비활성|끊김|사용 안 함|대기/.test(r[1]) ? '#7B8592' : '#16151A'}">${r[1]}</span></div>`).join('')}
-      </section>
-    </div>
   </main>`;
 }
-const micTag = v => v.sim ? '가상 입력' : v.wsOpen && (v.levels || v.s.linked) ? '실시간' : '신호 없음';
-const sysRows = v => [
-  ['실시간 입력', v.sim ? '가상 입력 (시뮬레이션)' : v.wsOpen ? '활성' : '비활성'],
-  ['오디오 스트림', v.sim ? '사용 안 함' : v.wsOpen ? (v.s.stream || '상태 수신 대기') : '끊김'],
-  ['AI 추론 시간', !v.sim && v.s.inferMs != null ? v.s.inferMs + ' ms' : '측정값 없음'],
-  ['마지막 수신', v.s.lastRx ? fmt(v.s.lastRx) : '—']
-];
 
 function tplHistory(v) {
   const { s, hist, filtered, sel } = v;
