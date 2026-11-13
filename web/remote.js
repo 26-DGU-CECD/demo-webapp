@@ -14,13 +14,16 @@ const CAT = [
   ['glass_break', 'glass-break', '유리 깨지는 소리', 'danger'],
   ['baby_cry', 'baby-cry', '아기 울음소리', 'danger'],
   ['scream', 'scream', '사람 비명', 'danger'],
+  ['explosion', 'explosion', '폭발음', 'danger'],
   ['car_horn', 'car-horn', '차량 경적', 'caution'],
   ['bicycle_approach', 'bicycle-approach', '자전거 접근 소리', 'caution'],
   ['construction_noise', 'construction-noise', '공사장 소음', 'caution'],
   ['knock', 'knock', '노크 소리', 'caution'],
   ['pet_cry', 'pet-cry', '개·고양이 울음소리', 'caution'],
+  ['kettle_whistle', 'kettle-whistle', '주전자 끓는 소리', 'caution'],
   ['water_running', 'water-running', '물 흐르는 소리', 'info'],
-  ['appliance', 'appliance', '가전제품 작동음', 'info']
+  ['appliance', 'appliance', '가전제품 작동음', 'info'],
+  ['cough', 'cough', '기침 소리', 'info']
 ].map(a => ({ label: a[0], img: 'assets/sounds/' + a[1] + '.png', ko: a[2], lv: a[3] }));
 const KEY = 'miimo-remote-presets';
 const CELLS = [[315, '좌측 전방'], [0, '전방'], [45, '우측 전방'], [270, '좌측'], [null, '착용자'], [90, '우측'], [225, '좌측 후방'], [180, '후방'], [135, '우측 후방']];
