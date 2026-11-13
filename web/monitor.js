@@ -282,7 +282,7 @@ function vals() {
   const dot = { ok: '#22C39A', off: '#C5CCD3', bad: '#D92D20', wait: '#E08A0B' };
   const wsSt = { open: ['ok', '연결됨'], connecting: ['wait', '연결 중'], error: ['bad', '연결 실패'], idle: ['off', '미연결'] }[s.ws];
   const pi = sim ? ['off', '미연결'] : wsSt;
-  const pico = (!sim && wsOpen) ? (s.pico === true ? ['ok', '연결됨'] : s.pico === false ? ['bad', '끊김'] : ['off', '확인 중']) : ['off', '미연결'];
+  const pico = (!sim && wsOpen) ? (s.pico === true ? ['ok', '연결됨'] : s.pico === false ? ['bad', '끊김'] : ['ok', '확인 중']) : ['off', '미연결'];
   const sock = sim ? ['off', '사용 안 함'] : wsSt;
   const mon = sim ? ['ok', '시뮬레이션'] : wsOpen ? ['ok', '실시간'] : ['off', '중지'];
   const chips = [['Raspberry Pi 5', pi], ['Pico 2H', pico], ['WebSocket', sock], ['모니터링', mon]].map(c => ({ label: c[0], st: c[1][1], dot: dot[c[1][0]] }));
@@ -346,7 +346,6 @@ function tplHeader(v) {
     <div class="grow"></div>
     <div class="hdr-r">
       ${v.chips.map(c => `<div class="chip"><span class="dot" style="background:${c.dot}"></span><b>${c.label}</b><i>${c.st}</i></div>`).join('')}
-      <a class="pill-link" href="remote.html" target="_blank"><span class="ms">settings_remote</span>리모컨 열기</a>
       <div class="mode ${sim ? 'sim' : 'live'}"><span class="ms">${sim ? 'science' : 'sensors'}</span>${sim ? 'SIMULATION MODE' : 'LIVE MODE'}</div>
     </div>
   </header>`;
