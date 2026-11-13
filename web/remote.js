@@ -25,7 +25,7 @@ const CAT = [
   ['appliance', 'appliance', '가전제품 작동음', 'info'],
   ['cough', 'cough', '기침 소리', 'info']
 ].map(a => ({ label: a[0], img: 'assets/sounds/' + a[1] + '.png', ko: a[2], lv: a[3] }));
-const KEY = 'miimo-remote-presets';
+const KEY = 'miimo-remote-presets-v2';
 const CELLS = [[315, '좌측 전방'], [0, '전방'], [45, '우측 전방'], [270, '좌측'], [null, '착용자'], [90, '우측'], [225, '좌측 후방'], [180, '후방'], [135, '우측 후방']];
 
 const state = { presets: [], selId: null, lastPong: 0, log: [], flashId: null };
@@ -40,7 +40,7 @@ const dirName = d => DIRS[Math.round(d / 45) % 8];
 const dirText = p => p.dirValid ? dirName(p.deg) + ' ' + p.deg + '°' : '방향 확인 중';
 const motorText = p => { if (p.motorMode !== 'manual') return '자동 매핑'; const on = IDS.filter(id => p.manual[id]); return on.length ? on.join(' · ') : '진동 없음'; };
 const mk = (label, deg, extra) => Object.assign({ id: 'p' + (++n) + '-' + Date.now().toString(36), label, deg, dirValid: true, sev: 'auto', intensity: 0.8, conf: 93, motorMode: 'auto', manual: {}, ack: true }, extra || {});
-const defaults = () => [['car_horn', 58], ['emergency_alarm', 0], ['glass_break', 262], ['baby_cry', 318], ['knock', 180], ['bicycle_approach', 135], ['scream', 90], ['water_running', 225]]
+const defaults = () => [['emergency_alarm', 232], ['car_horn', 112], ['baby_cry', 60], ['glass_break', 262], ['knock', 180], ['bicycle_approach', 135], ['scream', 90], ['water_running', 225]]
   .map(a => mk(a[0], a[1], { intensity: { danger: 1, caution: 0.8, info: 0.4 }[cat(a[0]).lv] }));
 
 function setState(patch) { Object.assign(state, patch); render(); }
