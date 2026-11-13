@@ -482,9 +482,7 @@ function tplHistory(v) {
 
 function tplDevice(v) {
   const { s, sim, cur, det, wsOpen, S, C, nodes, act, note, dot, pi, pico } = v;
-  const sm = s.sim, simC = catOf(sm.label);
   const dev = (icon, n, d, l, st) => `<div class="dev"><span class="ms">${icon}</span><div style="min-width:0"><div class="dev-n">${n}</div><div class="dev-d">${d}</div>${l ? `<div class="dev-l">${l}</div>` : ''}</div><span class="dev-st"><span class="dot" style="background:${st[0]}"></span>${st[1]}</span></div>`;
-  const lastText = det ? esc(cur.name) + ' → ' + (cur.dirValid ? dirName(cur.deg) + ' ' + cur.deg + '°' : '방향 확인 중') + ' → ' + (act.length ? act.map(n => n.id).join(' + ') : '진동 없음') : '대기 중 — 이벤트를 발생시키면 대시보드가 함께 갱신돼요';
   return `<main>
     <section class="card" style="padding:24px;display:flex;flex-direction:column;gap:20px">
       <div class="filters">
@@ -502,40 +500,8 @@ function tplDevice(v) {
       <div class="banner" style="background:${note.bg}"><img src="assets/miimo.png" alt="" style="filter:${note.filter}"><span style="color:${note.fg}">${note.text}</span></div>
     </section>
 
-    <div class="row2s">
-      <section class="card${sim ? '' : ' dimmed'}" style="flex:1.25 1 560px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:20px">
-        <div class="card-h" style="margin:0"><span class="h2 lg">시뮬레이션 제어</span><span class="tag">SIMULATION</span><span class="hint" style="margin-left:auto">${sim ? '' : 'Simulation Mode에서만 동작'}</span></div>
-        <div><div class="lbl" style="margin-bottom:10px">소리 종류</div>
-          <div class="tiles">${CAT.map(c => `<button class="tile${c.label === sm.label ? ' on' : ''}" data-act="sound" data-arg="${c.label}"><i style="background-image:${bg(c.img)}"></i><span>${c.ko}</span></button>`).join('')}</div></div>
-        <div class="wrap">
-          <div class="half">
-            <div class="vals"><span class="lbl" style="margin:0">방향</span><span class="n" id="simDegText">${sm.deg}°</span><span class="d" id="simDirName">${dirName(sm.deg)}</span></div>
-            <input type="range" min="0" max="359" value="${sm.deg}" id="simDeg">
-            <button class="tog" data-act="toggleDirValid"><span>방향 추정 유효 <i>· 끄면 ‘방향 확인 중’</i></span><span class="sw${sm.dirValid ? ' on' : ''}"></span></button>
-          </div>
-          <div class="half">
-            <div class="vals"><span class="lbl" style="margin:0">신뢰도</span><span class="n" id="simConfText">${sm.conf}%</span></div>
-            <input type="range" min="50" max="99" value="${sm.conf}" id="simConf">
-          </div>
-        </div>
-        <div class="wrap">
-          <div><div class="lbl">위험도</div>${seg([['auto', '자동 (' + SEV[simC.lv].ko + ')'], ['danger', '긴급'], ['caution', '주의'], ['info', '정보']], sm.sev, 'simSev')}</div>
-          <div><div class="lbl">진동 강도</div>${seg([[0.4, '약 40%'], [0.8, '중 80%'], [1, '강 100%']], sm.intensity, 'simInt')}</div>
-          <div><div class="lbl">모터 활성</div>
-            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px">${seg([['auto', '자동 (매핑)'], ['manual', '수동']], sm.motorMode, 'simMotor')}
-              <div class="mbtns" style="opacity:${sm.motorMode === 'manual' ? 1 : 0.35}">${IDS.map(id => `<button class="${sm.manual[id] ? 'on' : ''}" data-act="manual" data-arg="${id}">${id}</button>`).join('')}</div></div></div>
-        </div>
-        <div class="actions">
-          <button class="btn kr h54" data-act="fireSim"><span class="ms" style="font-size:22px">bolt</span>감지 이벤트 발생</button>
-          <button class="btn kr h54 ghost" style="padding:0 22px" data-act="reset"><span class="ms" style="font-size:22px">restart_alt</span>시뮬레이션 초기화</button>
-          <div class="grow"></div>
-          <button class="tog auto" data-act="toggleAuto"><span>자동 시연</span><span class="sw${s.auto ? ' on' : ''}"></span></button>
-        </div>
-        <div class="last" style="background:${C.bg};color:${C.tx}"><span class="ms">${det ? S.icon : 'hearing'}</span><span>${lastText}</span><button class="link-btn" data-act="tab" data-arg="dashboard">대시보드에서 보기<span class="ms">chevron_right</span></button></div>
-      </section>
-
-      <div style="flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:20px">
-        <section class="card" style="padding:24px">
+    <div class="row2s" style="align-items:stretch">
+        <section class="card" style="flex:1 1 440px;min-width:0;padding:24px">
           <div class="card-h" style="margin-bottom:6px"><span class="h2 lg">진동 모듈 테스트</span><span class="hint" style="margin-left:auto">${wsOpen ? '누르면 motor_test 명령 전송' : '하드웨어 미연결 · UI 동작만'}</span></div>
           <div class="test-wrap">
             <div class="sq neck280"><svg viewBox="0 0 400 400">${NECK_SVG}</svg><span class="dl top" style="font-weight:900;color:#16151A">전방</span>
@@ -546,8 +512,8 @@ function tplDevice(v) {
           </div>
         </section>
 
-        <section class="card" style="padding:24px">
-          <div class="card-h" style="margin-bottom:14px"><span class="h2 lg">방향 → 모터 매핑</span><span class="tag warn">임시 · 하드웨어 확정 전</span></div>
+        <section class="card" style="flex:1 1 440px;min-width:0;padding:24px">
+          <div class="card-h" style="margin-bottom:14px"><span class="h2 lg">방향 → 모터 매핑</span></div>
           <div class="wrap">
             <div style="flex:1 1 190px;min-width:0"><div class="sub-l">위치별 모터 번호</div>
               ${POS.map((p, i) => `<div class="pos-row"><span>${p.ko}</span><select data-act="pos" data-arg="${i}">${IDS.map(id => `<option value="${id}"${s.posMap[i] === id ? ' selected' : ''}>${id}</option>`).join('')}</select></div>`).join('')}</div>
@@ -560,7 +526,6 @@ function tplDevice(v) {
           <div class="card-h" style="margin-bottom:14px"><span class="h2 lg">마이크 입력 · INMP441 × 4</span><span class="cnt" style="margin-left:auto">${micTag(v)}</span></div>
           <div class="mic-grid">${v.mics.map(m => micTpl(m, true)).join('')}</div>
         </section>
-      </div>
     </div>
   </main>`;
 }
