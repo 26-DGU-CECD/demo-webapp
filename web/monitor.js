@@ -57,6 +57,7 @@ const state = {
   lastRx: null, pico: true, micLevels: null, inferMs: null, stream: '정상', linked: true, auto: false,
   selId: null, fSev: 'all', fSound: 'all', fRange: 'all',
   posMap: ['M1', 'M2', 'M3', 'M4', 'M5'],
+  mute: {}, dropped: 0, // 감지 필터: 차단 라벨 · 걸러진 건수
   sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
 };
 let seq = 0, ws = null, bc = null, burst = null, room = null, lv = null;
@@ -112,6 +113,8 @@ function normalize(msg, source) {
   };
 }
 function ingest(msg, source, autoAck) {
+  // 감지 필터: 차단한 라벨은 버림
+  if (state.mute[msg.sound_label]) { setState(s => ({ dropped: s.dropped + 1 })); return; }
   const ev = normalize(msg, source);
   burst = { t: Date.now(), deg: ev.deg, valid: ev.dirValid, amp: { danger: 0.8, caution: 0.6, info: 0.4 }[ev.sev] };
   clearTimeout(T.hold); clearTimeout(T.ack);
@@ -522,9 +525,15 @@ function tplDevice(v) {
           </div>
         </section>
 
-        <section class="card" style="padding:24px">
-          <div class="card-h" style="margin-bottom:14px"><span class="h2 lg">마이크 입력 · INMP441 × 4</span><span class="cnt" style="margin-left:auto">${micTag(v)}</span></div>
-          <div class="mic-grid">${v.mics.map(m => micTpl(m, true)).join('')}</div>
+        <section class="card" style="flex:1 1 440px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px">
+          <div class="card-h" style="margin:0"><span class="h2 lg">감지 필터</span></div>
+          <div><div class="card-h"><span class="lbl" style="margin:0">받을 소리 라벨</span><span class="hint">${CAT.filter(c => !s.mute[c.label]).length}/${CAT.length} 허용 · 걸러짐 ${s.dropped}건</span><button class="link-btn" data-act="muteNone">전체 허용</button></div>
+            ${[['danger', '위험음'], ['caution', '경고음'], ['info', '편의음']].map(g => {
+              const list = CAT.filter(c => c.lv === g[0]), off = list.every(c => s.mute[c.label]), G = SEV[g[0]];
+              return `<div class="card-h" style="margin:14px 0 8px"><span class="ms" style="font-size:20px;color:${G.fg}">${G.icon}</span><span class="lbl" style="margin:0;color:${G.tx}">${g[1]}</span><span class="hint">${list.filter(c => !s.mute[c.label]).length}/${list.length}</span>
+                <button class="link-btn" style="color:${off ? 'var(--dim)' : G.tx}" data-act="muteLv" data-arg="${g[0]}"><span class="ms">${off ? 'notifications_off' : 'notifications_active'}</span>${g[1]} ${off ? '켜기' : '끄기'}</button></div>
+              <div class="tiles">${list.map(c => `<button class="tile${s.mute[c.label] ? '' : ' on'}" style="opacity:${s.mute[c.label] ? 0.45 : 1}" data-act="mute" data-arg="${c.label}"><i style="background-image:${bg(c.img)}"></i><span>${c.ko}</span></button>`).join('')}</div>`;
+            }).join('')}</div>
         </section>
     </div>
   </main>`;
@@ -562,7 +571,15 @@ const ACT = {
   fireSim: () => fireSim(),
   reset: () => reset(),
   toggleAuto: () => { if (state.mode === 'sim') setAuto(!state.auto); },
-  test: a => testMotor(a)
+  test: a => testMotor(a),
+  mute: a => setState(s => ({ mute: Object.assign({}, s.mute, { [a]: !s.mute[a] }) })),
+  muteNone: () => setState({ mute: {} }),
+  // 위험도 그룹 일괄: 전부 꺼져 있으면 켜고, 아니면 전부 끔
+  muteLv: a => setState(s => {
+    const list = CAT.filter(c => c.lv === a), on = !list.every(c => s.mute[c.label]), mute = Object.assign({}, s.mute);
+    list.forEach(c => { mute[c.label] = on; });
+    return { mute };
+  })
 };
 app.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
