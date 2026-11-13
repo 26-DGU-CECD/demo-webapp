@@ -347,6 +347,7 @@ function tplHeader(v) {
     <div class="hdr-r">
       ${v.chips.map(c => `<div class="chip"><span class="dot" style="background:${c.dot}"></span><b>${c.label}</b><i>${c.st}</i></div>`).join('')}
       <div class="mode ${sim ? 'sim' : 'live'}"><span class="ms">${sim ? 'science' : 'sensors'}</span>${sim ? 'SIMULATION MODE' : 'LIVE MODE'}</div>
+      <div class="mode" style="background:#F0F3F5;color:var(--ink)"><span class="ms">battery_5_bar</span>73%</div>
     </div>
   </header>`;
 }
