@@ -10,9 +10,9 @@ Wants=network-online.target tailscaled.service
 Type=simple
 User=miimo
 Group=miimo
-WorkingDirectory=/opt/miimo/server
+WorkingDirectory=/opt/miimo/webapp/server
 EnvironmentFile=/etc/miimo/relay.env
-ExecStart=/usr/bin/node /opt/miimo/server/server.js
+ExecStart=/usr/bin/node /opt/miimo/webapp/server/server.js
 Restart=always
 RestartSec=2
 

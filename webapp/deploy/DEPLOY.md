@@ -135,7 +135,7 @@ tailscale status
 ```bash
 useradd --system --home /opt/miimo --shell /usr/sbin/nologin miimo
 git clone https://github.com/26-DGU-CECD/demo-webapp.git /opt/miimo
-cd /opt/miimo/server && npm ci --omit=dev
+cd /opt/miimo/webapp/server && npm ci --omit=dev
 chown -R miimo:miimo /opt/miimo
 ```
 성공 시:
@@ -148,11 +148,11 @@ added 1 package, and audited 2 packages in 1s
 **[명령] 환경변수 파일** (기본값 그대로 사용: 80 / 127.0.0.1:8787 / 헤더 필수)
 ```bash
 mkdir -p /etc/miimo
-cp /opt/miimo/server/.env.example /etc/miimo/relay.env
+cp /opt/miimo/webapp/server/.env.example /etc/miimo/relay.env
 chown root:miimo /etc/miimo/relay.env && chmod 640 /etc/miimo/relay.env
 cat /etc/miimo/relay.env
 ```
-성공 시: `PUBLIC_PORT=80`, `REMOTE_PORT=8787`, `REQUIRE_TAILSCALE_HEADER=1`, `WEB_DIR=/opt/miimo/web` 가 보임. 바꿀 값 있으면 `nano /etc/miimo/relay.env` (저장 Ctrl+O, Enter, 종료 Ctrl+X).
+성공 시: `PUBLIC_PORT=80`, `REMOTE_PORT=8787`, `REQUIRE_TAILSCALE_HEADER=1`, `WEB_DIR=/opt/miimo/webapp/web` 가 보임. 바꿀 값 있으면 `nano /etc/miimo/relay.env` (저장 Ctrl+O, Enter, 종료 Ctrl+X).
 
 ---
 
@@ -160,7 +160,7 @@ cat /etc/miimo/relay.env
 
 **[명령]**
 ```bash
-cp /opt/miimo/deploy/miimo.service /etc/systemd/system/miimo.service
+cp /opt/miimo/webapp/deploy/miimo.service /etc/systemd/system/miimo.service
 systemctl daemon-reload
 systemctl enable --now miimo
 systemctl status miimo --no-pager
@@ -360,8 +360,25 @@ journalctl -u miimo -n 5 --no-pager
 ```
 성공 시: `Updating xxxx..yyyy` 후 로그에 `public : ...`, `remote : ...` 다시 출력.
 
-- `server/package.json` 이 바뀐 경우만 `cd /opt/miimo/server && npm ci --omit=dev` 추가.
-- `web/` 만 바뀐 경우 `git pull` 만으로 반영(브라우저 새로고침, 안 바뀌면 Ctrl+F5).
+- `webapp/server/package.json` 이 바뀐 경우만 `cd /opt/miimo/webapp/server && npm ci --omit=dev` 추가.
+- `webapp/web/` 만 바뀐 경우 `git pull` 만으로 반영(브라우저 새로고침, 안 바뀌면 Ctrl+F5).
+
+### 폴더 구조 변경 전에 설치한 서버 (한 번만)
+
+저장소가 `webapp/` · `pico/` · `raspberrypi/` 로 나뉘면서 서버 코드 경로가 `/opt/miimo/server` → `/opt/miimo/webapp/server` 로 바뀌었습니다. 이전 구조로 설치한 서버는 `git pull` 뒤 아래를 한 번 실행해야 다시 뜹니다.
+
+**[명령]**
+```bash
+cd /opt/miimo && git pull
+cd /opt/miimo/webapp/server && npm ci --omit=dev
+cp /opt/miimo/webapp/deploy/miimo.service /etc/systemd/system/miimo.service
+sed -i 's#^WEB_DIR=.*#WEB_DIR=/opt/miimo/webapp/web#' /etc/miimo/relay.env
+rm -rf /opt/miimo/server
+chown -R miimo:miimo /opt/miimo
+systemctl daemon-reload && systemctl restart miimo
+journalctl -u miimo -n 5 --no-pager
+```
+성공 시: 로그에 `web dir : /opt/miimo/webapp/web` 와 `public : ...`, `remote : ...` 출력. (`rm -rf /opt/miimo/server` 는 옮겨진 뒤 남은 예전 `node_modules` 를 지웁니다.)
 
 ---
 
