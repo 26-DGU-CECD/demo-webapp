@@ -6,9 +6,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "PUBLIC_PORT=8080 REQUIRE_TAILSCALE_HEADER=0 node server.js"
+    "dev": "node --env-file=.env server.js",
+    "test": "node test.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": { "node": ">=20.6" },
   "dependencies": {
     "ws": "^8.18.0"
   }
