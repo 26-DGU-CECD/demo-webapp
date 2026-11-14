@@ -6,6 +6,7 @@
  *    - serves web/ static files (monitor dashboard). remote.* are never served here.
  *    - GET /ws : send-only WebSocket. Anything a public client sends is dropped.
  *    - POST /api/strength : { strength: 0..1 } global vibration strength, set from the dashboard.
+ *    - POST /api/test : { id: "M1".."M5" } buzz one motor on the device (dashboard motor test).
  *    - GET /device : two-way WebSocket for the one hardware bridge (bridge.py -> Pico).
  *      Requires `Authorization: Bearer <DEVICE_TOKEN>`. Disabled when DEVICE_TOKEN is empty.
  *      Receives detection/control only (no snapshot); may send motor_state / status.
@@ -51,6 +52,9 @@ const state = { last: null, history: [], ignoredPublicMessages: 0, strength: CFG
 const dashboards = new Set();
 let device = null;        // the single hardware bridge socket
 let deviceStatus = null;  // last status it reported, replayed to newly connected dashboards
+// ponytail: one flag, not per-command ids — the device's motor_state carries no command id, so a
+// reply to a motor test is told apart only by "a test was the last thing sent". Add ids if that ever misfires.
+let testing = false;
 const deviceOpen = () => !!device && device.readyState === WebSocket.OPEN;
 
 function broadcast(msg) {
@@ -88,6 +92,19 @@ const pub = http.createServer((req, res) => {
   // The one thing a dashboard may change: global vibration strength (Device page slider).
   // Unauthenticated like the rest of the public listener, so it only accepts a bounded number.
   const route = req.method + ' ' + new URL(req.url, 'http://x').pathname;
+  // Device page "motor test": buzz one motor on the real device. Sent as an ordinary detection
+  // (one motor, info = single pulse) so the device needs no extra message type. Dashboards are not told.
+  if (route === 'POST /api/test') {
+    return readJson(req, (err, body) => {
+      if (err || !body || !IDS.includes(body.id)) return end(res, 400, 'bad id');
+      if (!deviceOpen()) return end(res, 409, 'no device');
+      testing = true;
+      device.send(JSON.stringify({ type: 'detection', sound_label: 'motor_test', severity: 'info', strength: state.strength,
+        motors: IDS.map(id => ({ id, active: id === body.id, intensity: id === body.id ? 1 : 0 })) }));
+      log('motor test', req.socket.remoteAddress, body.id);
+      end(res, 200, { ok: true });
+    });
+  }
   if (route === 'POST /api/strength') {
     return readJson(req, (err, body) => {
       if (err || !body || !isUnit(body.strength)) return end(res, 400, 'bad strength');
@@ -159,6 +176,7 @@ function upgradeDevice(req, socket, head) {
       let m; try { m = JSON.parse(data); } catch (e) { return; }
       const out = cleanDevice(m);
       if (!out) return;
+      if (out.type === 'motor_state' && testing) return; // confirmation of a motor test, not of a detection on screen
       if (out.type === 'status') deviceStatus = out;
       // Real confirmation arrived: stored copies no longer need ack:false, so a dashboard
       // that reloads restores this detection as confirmed.
@@ -254,6 +272,7 @@ const rem = http.createServer((req, res) => {
       msg._by = who.login;
       msg.timestamp = new Date().toISOString(); // server clock, not the phone's
       const toDevice = deviceOpen();
+      testing = false;
       if (msg.type === 'detection') {
         // A real device will confirm with motor_state, so tell dashboards not to fake it.
         if (toDevice) msg.ack = false;

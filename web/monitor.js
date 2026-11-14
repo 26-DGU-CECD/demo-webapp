@@ -284,7 +284,9 @@ function reset() {
   setState({ current: null, phase: 'idle', ack: {}, history: [], rot: 0, lastRx: null, selId: null, auto: false, testing: {} });
 }
 function testMotor(id) {
-  send({ type: 'motor_test', id, intensity: state.sim.intensity, duration_ms: 1200 });
+  // 중계 서버로 서빙될 때는 서버가 실제 기기에 한 개짜리 진동 명령을 보냄 (세기는 위 '진동 세기' 값)
+  if (relayUrl) fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => { /* noop */ });
+  else send({ type: 'motor_test', id, intensity: state.sim.intensity, duration_ms: 1200 });
   setState(s => ({ testing: Object.assign({}, s.testing, { [id]: true }) }));
   setTimeout(() => setState(s => ({ testing: Object.assign({}, s.testing, { [id]: false }) })), 1200);
 }
@@ -498,7 +500,7 @@ function tplDevice(v) {
 
     <div class="row2s" style="align-items:stretch">
         <section class="card" style="flex:1 1 440px;min-width:0;padding:24px">
-          <div class="card-h" style="margin-bottom:6px"><span class="h2 lg">진동 모듈 테스트</span><span class="hint" style="margin-left:auto">${wsOpen ? '누르면 motor_test 명령 전송' : '하드웨어 미연결 · UI 동작만'}</span></div>
+          <div class="card-h" style="margin-bottom:6px"><span class="h2 lg">진동 모듈 테스트</span><span class="hint" style="margin-left:auto">${relayUrl && wsOpen && s.pico === true ? '누르면 실제 모터가 한 번 떨려요' : wsOpen && !relayUrl ? '누르면 motor_test 명령 전송' : '하드웨어 미연결 · UI 동작만'}</span></div>
           <div class="test-wrap">
             <div class="sq neck280"><svg viewBox="0 0 400 400">${NECK_SVG}</svg><span class="dl top" style="font-weight:900;color:#16151A">전방</span>
               ${nodes.map(m => `<button class="node btn-node" data-act="test" data-arg="${m.id}" style="left:${m.left};top:${m.top}">

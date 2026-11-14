@@ -99,9 +99,19 @@ async function run() {
   await api('/api/send', det());
   assert.equal((await dev.next()).strength, 0.5); assert.equal((await dash.next()).strength, 0.5);
 
-  // control goes to the device too
+  // motor test from the dashboard: one motor to the device, its confirmation is not relayed
+  const motorTest = id => fetch(`http://127.0.0.1:${PUB}/api/test`, { method: 'POST', body: JSON.stringify({ id }) }).then(x => x.status);
+  assert.equal(await motorTest('M9'), 400);
+  assert.equal(await motorTest('M2'), 200);
+  m = await dev.next();
+  assert.deepEqual([m.type, m.sound_label, m.severity, m.strength, active(m), m.motors.length], ['detection', 'motor_test', 'info', 0.5, 'M2', 5]);
+  dev.send({ type: 'motor_state', motors: [{ id: 'M2', active: true }] });
+  await sleep(150);
+
+  // control goes to the device too (and is the next thing dashboards see: the test reply was dropped)
   await api('/api/send', { type: 'control', action: 'idle' });
-  assert.deepEqual([(m = await dev.next()).type, m.action], ['control', 'idle']); await dash.next();
+  assert.deepEqual([(m = await dev.next()).type, m.action], ['control', 'idle']);
+  assert.equal((await dash.next()).type, 'control');
 
   // a second device replaces the first
   const dev2 = client('/device', TOKEN);
@@ -117,6 +127,7 @@ async function run() {
   assert.equal((await api('/api/status')).json.device, false);
   await api('/api/send', det());
   assert.equal((await dash.next()).ack, undefined);
+  assert.equal(await motorTest('M2'), 409);
   dash.ws.close();
 }
 
