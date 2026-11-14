@@ -34,7 +34,7 @@ const POS = [
   { ko: '후방 우', x: 70.7, y: 69.9 },
   { ko: '우측 팁', x: 77, y: 31.25 }
 ];
-// 임시 방향→위치 매핑 (시뮬레이션 전용. 실제 제어는 Pi 5가 결정해 motors[] 로 전송)
+// 방향→위치 매핑 (시뮬레이션 전용. 실제 제어는 중계 서버가 같은 표로 motors[] 를 채워 보냄 — server/server.js 의 SECT 와 함께 수정)
 const SECT = [
   { ko: '전방', from: 340, to: 20, pos: [0, 4] },
   { ko: '우측', from: 20, to: 100, pos: [4] },
@@ -57,8 +57,7 @@ const state = {
   lastRx: null, pico: true, micLevels: null, inferMs: null, stream: '정상', linked: true, auto: false,
   selId: null, fSev: 'all', fSound: 'all', fRange: 'all',
   posMap: ['M1', 'M2', 'M3', 'M4', 'M5'],
-  mute: {}, dropped: 0, // 감지 필터: 차단 라벨 · 걸러진 건수
-  sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
+  mute: {}, dropped: 0, // 감지 필터: 차단 라벨 · 걸러진 건수  sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
 };
 let seq = 0, ws = null, bc = null, burst = null, room = null, lv = null;
 // 중계 서버(server/server.js)로 서빙될 때: ws://<host>/ws 자동 접속 + 백오프 재연결
@@ -130,7 +129,8 @@ function ingest(msg, source, autoAck) {
   T.hold = setTimeout(() => setState({ phase: 'idle', ack: {} }), CFG.holdSeconds * 1000);
 }
 function applyAck(ids) {
-  if (state.current) state.current.ackIds = ids;
+  // 전부 꺼짐(정지·오류 시 기기가 보냄)은 화면 표시만 끄고, 기록에 남은 확인 내역은 지우지 않음
+  if (state.current && ids.length) state.current.ackIds = ids;
   const ack = {}; ids.forEach(i => { ack[i] = true; });
   setState({ ack });
 }
