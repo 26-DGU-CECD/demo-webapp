@@ -28,7 +28,7 @@ const CAT = [
 const KEY = 'miimo-remote-presets-v2';
 const CELLS = [[315, '좌측 전방'], [0, '전방'], [45, '우측 전방'], [270, '좌측'], [null, '착용자'], [90, '우측'], [225, '좌측 후방'], [180, '후방'], [135, '우측 후방']];
 
-const state = { presets: [], selId: null, lastPong: 0, log: [], flashId: null };
+const state = { presets: [], selId: null, lastPong: 0, log: [], flashId: null, device: false };
 let n = 0, bc = null, flashT = 0;
 const seen = [];
 const app = document.getElementById('app');
@@ -63,11 +63,12 @@ function bus(msg) {
   if (API !== null && (msg.type === 'detection' || msg.type === 'control')) {
     fetch(API + '/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) })
       .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
-      .then(j => markMonitors(j.monitors))
+      .then(j => { markMonitors(j.monitors); markDevice(j.device); })
       .catch(err => { addLog('전송 실패 · ' + err.message); render(); });
   }
 }
 function markMonitors(n) { if (n > 0) { const was = isOnline(); state.lastPong = Date.now(); if (!was) render(); } }
+function markDevice(d) { if (!!d !== state.device) setState({ device: !!d }); }
 function onBus(m) {
   if (!m || m._from !== 'monitor' || seen.includes(m._id)) return;
   seen.push(m._id); if (seen.length > 40) seen.shift();
@@ -101,6 +102,7 @@ function render() {
       <div><div class="logo-t">miimo <span>Remote</span></div><div class="logo-s">대시보드 실시간 조작</div></div></div>
     <div class="grow"></div>
     <div class="link-st ${online ? 'on' : 'off'}"><span class="dot" style="background:${online ? '#22C39A' : '#E08A0B'}"></span>${online ? '대시보드 연결됨' : '대시보드 응답 없음 · 대시보드 페이지를 열어 주세요'}</div>
+    ${API === null ? '' : `<div class="link-st ${s.device ? 'on' : 'off'}"><span class="dot" style="background:${s.device ? '#22C39A' : '#E08A0B'}"></span>${s.device ? '기기 연결됨' : '기기 없음 · 진동은 화면에만 표시'}</div>`}
     <a class="pill-link" href="monitor.html" target="_blank"><span class="ms">space_dashboard</span>대시보드 열기</a>
   </header>
   <main>
@@ -223,7 +225,7 @@ function init() {
   let was = isOnline();
   setInterval(() => {
     bus({ type: 'ping' });
-    if (API !== null) fetch(API + '/api/status').then(r => r.json()).then(j => markMonitors(j.monitors)).catch(() => { /* 서버 응답 없음 → 4초 뒤 오프라인 표시 */ });
+    if (API !== null) fetch(API + '/api/status').then(r => r.json()).then(j => { markMonitors(j.monitors); markDevice(j.device); }).catch(() => { /* 서버 응답 없음 → 4초 뒤 오프라인 표시 */ });
     const on = isOnline(); if (on !== was) { was = on; render(); }
   }, 1500);
   render();
