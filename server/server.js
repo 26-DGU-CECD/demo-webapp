@@ -5,6 +5,7 @@
  *  PUBLIC listener  (PUBLIC_HOST:PUBLIC_PORT, default 0.0.0.0:80)
  *    - serves web/ static files (monitor dashboard). remote.* are never served here.
  *    - GET /ws : send-only WebSocket. Anything a public client sends is dropped.
+ *    - POST /api/strength : { strength: 0..1 } global vibration strength, set from the dashboard.
  *    - GET /device : two-way WebSocket for the one hardware bridge (bridge.py -> Pico).
  *      Requires `Authorization: Bearer <DEVICE_TOKEN>`. Disabled when DEVICE_TOKEN is empty.
  *      Receives detection/control only (no snapshot); may send motor_state / status.
@@ -30,6 +31,8 @@ const CFG = {
   remotePort: +env('REMOTE_PORT', 8787),
   webDir: path.resolve(env('WEB_DIR', path.join(__dirname, '..', 'web'))),
   historyLimit: +env('HISTORY_LIMIT', 50),
+  // Starting vibration strength (0..1). Dashboards can change it at runtime; resets to this on restart.
+  strength: +env('STRENGTH', 0.25),
   requireTailscale: env('REQUIRE_TAILSCALE_HEADER', '1') !== '0',
   deviceToken: env('DEVICE_TOKEN', ''),
   // Which motor sits at each neckband position: left tip, rear left, rear centre, rear right, right tip.
@@ -43,7 +46,8 @@ const IDS = ['M1', 'M2', 'M3', 'M4', 'M5'];
 if (CFG.posMap.slice().sort().join() !== IDS.join()) { console.error('POS_MAP must list M1..M5 exactly once each, got: ' + CFG.posMap.join(',')); process.exit(1); }
 
 // ── state (memory only) ─────────────────────────────────────
-const state = { last: null, history: [], ignoredPublicMessages: 0 };
+if (!(CFG.strength >= 0 && CFG.strength <= 1)) { console.error('STRENGTH must be a number from 0 to 1'); process.exit(1); }
+const state = { last: null, history: [], ignoredPublicMessages: 0, strength: CFG.strength };
 const dashboards = new Set();
 let device = null;        // the single hardware bridge socket
 let deviceStatus = null;  // last status it reported, replayed to newly connected dashboards
@@ -54,7 +58,7 @@ function broadcast(msg) {
   for (const ws of dashboards) if (ws.readyState === WebSocket.OPEN) ws.send(data);
 }
 function snapshot() {
-  return { type: 'snapshot', now: Date.now(), last: state.last, history: state.history };
+  return { type: 'snapshot', now: Date.now(), last: state.last, history: state.history, strength: state.strength };
 }
 
 // ── static files ────────────────────────────────────────────
@@ -81,6 +85,18 @@ function end(res, code, text, headers) {
 
 // ── PUBLIC: dashboard + send-only websocket ─────────────────
 const pub = http.createServer((req, res) => {
+  // The one thing a dashboard may change: global vibration strength (Device page slider).
+  // Unauthenticated like the rest of the public listener, so it only accepts a bounded number.
+  const route = req.method + ' ' + new URL(req.url, 'http://x').pathname;
+  if (route === 'POST /api/strength') {
+    return readJson(req, (err, body) => {
+      if (err || !body || !isUnit(body.strength)) return end(res, 400, 'bad strength');
+      state.strength = body.strength;
+      log('strength', req.socket.remoteAddress, state.strength);
+      broadcast({ type: 'config', strength: state.strength });
+      end(res, 200, { ok: true, strength: state.strength });
+    });
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') return end(res, 405, 'method not allowed');
   serveStatic(req, res, 'monitor.html', false);
 });
@@ -241,6 +257,7 @@ const rem = http.createServer((req, res) => {
       if (msg.type === 'detection') {
         // A real device will confirm with motor_state, so tell dashboards not to fake it.
         if (toDevice) msg.ack = false;
+        msg.strength = state.strength; // global strength for this vibration; the device uses it as its drive level
         state.last = Object.assign({ _at: Date.now() }, msg);
         state.history.unshift(msg);
         if (state.history.length > CFG.historyLimit) state.history.length = CFG.historyLimit;

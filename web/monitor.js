@@ -57,7 +57,9 @@ const state = {
   lastRx: null, pico: true, micLevels: null, inferMs: null, stream: '정상', linked: true, auto: false,
   selId: null, fSev: 'all', fSound: 'all', fRange: 'all',
   posMap: ['M1', 'M2', 'M3', 'M4', 'M5'],
-  mute: {}, dropped: 0, // 감지 필터: 차단 라벨 · 걸러진 건수  sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
+  mute: {}, dropped: 0, // 감지 필터: 차단 라벨 · 걸러진 건수
+  strength: null,       // 진동 세기 0..1 (중계 서버가 보관 · 모든 대시보드 공유). null = 아직 모름
+  sim: { label: 'car_horn', deg: 58, dirValid: true, sev: 'auto', motorMode: 'auto', manual: {}, intensity: 0.8, conf: 93 }
 };
 let seq = 0, ws = null, bc = null, burst = null, room = null, lv = null;
 // 중계 서버(server/server.js)로 서빙될 때: ws://<host>/ws 자동 접속 + 백오프 재연결
@@ -139,6 +141,7 @@ function onMessage(m) {
   if (m._from === 'remote') { onRemote(m); return; }      // 중계 서버가 전달한 리모컨 메시지
   if (m.type === 'snapshot') { applySnapshot(m); return; } // 접속 직후 서버가 보내는 현재 상태
   if (m.type === 'detection') ingest(m, 'live');
+  else if (m.type === 'config') { if (typeof m.strength === 'number') setState({ strength: m.strength }); }
   else if (m.type === 'motor_state') { applyAck((m.motors || []).filter(x => x.active).map(x => x.id)); setState({ lastRx: new Date() }); }
   else if (m.type === 'status') setState(s => ({
     lastRx: new Date(),
@@ -200,6 +203,7 @@ function remoteMsg(m) {
 }
 // 서버 snapshot: 과거 기록은 조용히 복원, 마지막 감지가 아직 표시 시간 안이면 화면에도 띄움
 function applySnapshot(m) {
+  if (typeof m.strength === 'number') setState({ strength: m.strength });
   const hold = CFG.holdSeconds * 1000;
   const age = m.last && typeof m.last._at === 'number' ? (m.now || Date.now()) - m.last._at : Infinity;
   const fresh = age < hold;
@@ -239,6 +243,14 @@ function disconnect() {
   const sock = ws; ws = null;
   if (sock) { try { sock.close(); } catch (e) { /* noop */ } }
   setState({ ws: 'idle', pico: null, micLevels: null, stream: null, linked: false });
+}
+// 진동 세기 변경 → 중계 서버. 서버가 config 로 모든 대시보드에 다시 알려 줌. 실패하면 이전 값으로 되돌림.
+function setStrength(v) {
+  const prev = state.strength;
+  setState({ strength: v });
+  fetch('/api/strength', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ strength: v }) })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); })
+    .catch(() => setState({ strength: prev }));
 }
 function send(obj) { if (ws && state.ws === 'open') { try { ws.send(JSON.stringify(obj)); } catch (e) { /* noop */ } } }
 
@@ -508,6 +520,9 @@ function tplDevice(v) {
 
         <section class="card" style="flex:1 1 440px;min-width:0;padding:24px;display:flex;flex-direction:column;gap:18px">
           <div class="card-h" style="margin:0"><span class="h2 lg">감지 필터</span></div>
+          ${(() => { const can = !!relayUrl && wsOpen && s.strength != null, pct = Math.round((s.strength == null ? 0.25 : s.strength) * 100);
+            return `<div><div class="card-h"><span class="lbl" style="margin:0">진동 세기</span><span class="hint">${can ? '실제 기기에 적용 · 다음 진동부터' : '중계 서버에 연결되면 바꿀 수 있어요'}</span><b id="strengthText" style="margin-left:auto;font-family:'Nunito',sans-serif;font-weight:900;font-size:16px;color:${can ? 'var(--mint)' : 'var(--dim)'}">${pct}%</b></div>
+            <input type="range" id="strength" min="5" max="100" step="5" value="${pct}"${can ? '' : ' disabled'}></div>`; })()}
           <div><div class="card-h"><span class="lbl" style="margin:0">받을 소리 라벨</span><span class="hint">${CAT.filter(c => !s.mute[c.label]).length}/${CAT.length} 허용 · 걸러짐 ${s.dropped}건</span><button class="link-btn" data-act="muteNone">전체 허용</button></div>
             ${[['danger', '위험음'], ['caution', '경고음'], ['info', '편의음']].map(g => {
               const list = CAT.filter(c => c.lv === g[0]), off = list.every(c => s.mute[c.label]), G = SEV[g[0]];
@@ -574,13 +589,15 @@ app.addEventListener('change', e => {
   else if (el.dataset.act === 'pos') {
     const i = +el.dataset.arg, v = el.value, m = state.posMap.slice(), j = m.indexOf(v);
     m[j] = m[i]; m[i] = v; setState({ posMap: m });
-  } else if (el.id === 'simDeg') setSim({ deg: +el.value });
+  } else if (el.id === 'strength') setStrength(+el.value / 100);
+  else if (el.id === 'simDeg') setSim({ deg: +el.value });
   else if (el.id === 'simConf') setSim({ conf: +el.value });
 });
 app.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'simDeg') { state.sim.deg = +el.value; document.getElementById('simDegText').textContent = el.value + '°'; document.getElementById('simDirName').textContent = dirName(+el.value); }
   else if (el.id === 'simConf') { state.sim.conf = +el.value; document.getElementById('simConfText').textContent = el.value + '%'; }
+  else if (el.id === 'strength') document.getElementById('strengthText').textContent = el.value + '%';
   else if (el.id === 'wsUrl') state.wsUrl = el.value;
 });
 

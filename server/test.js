@@ -89,6 +89,16 @@ async function run() {
   assert.deepEqual(await dash2.next(), { type: 'status', pico_connected: true });
   dash2.ws.close();
 
+  // strength: default 0.25 rides on every detection; a dashboard can change it via the public listener
+  assert.equal(m.strength, 0.25); assert.equal(m.last.strength, 0.25);
+  const setStrength = v => fetch(`http://127.0.0.1:${PUB}/api/strength`, { method: 'POST', body: JSON.stringify({ strength: v }) }).then(x => x.status);
+  assert.equal(await setStrength(7), 400);
+  assert.equal(await setStrength('0.5'), 400);
+  assert.equal(await setStrength(0.5), 200);
+  assert.deepEqual(await dash.next(), { type: 'config', strength: 0.5 });
+  await api('/api/send', det());
+  assert.equal((await dev.next()).strength, 0.5); assert.equal((await dash.next()).strength, 0.5);
+
   // control goes to the device too
   await api('/api/send', { type: 'control', action: 'idle' });
   assert.deepEqual([(m = await dev.next()).type, m.action], ['control', 'idle']); await dash.next();
@@ -110,7 +120,7 @@ async function run() {
   dash.ws.close();
 }
 
-const env = Object.assign({}, process.env, { PUBLIC_HOST: '127.0.0.1', PUBLIC_PORT: PUB, REMOTE_PORT: REM, REQUIRE_TAILSCALE_HEADER: '0', DEVICE_TOKEN: TOKEN, POS_MAP: '' });
+const env = Object.assign({}, process.env, { PUBLIC_HOST: '127.0.0.1', PUBLIC_PORT: PUB, REMOTE_PORT: REM, REQUIRE_TAILSCALE_HEADER: '0', DEVICE_TOKEN: TOKEN, POS_MAP: '', STRENGTH: '' });
 const srv = spawn(process.execPath, [require('path').join(__dirname, 'server.js')], { env, stdio: ['ignore', 'pipe', 'inherit'] });
 let out = '', started = false;
 srv.stdout.on('data', d => {
