@@ -15,7 +15,8 @@ import select
 import time
 from machine import Pin, PWM
 
-MOTORS = {"M1": 2, "M2": 3, "M3": 4, "M4": 5, "M5": 6}   # name: GPIO, active-HIGH
+MOTORS = {"M1": 6, "M2": 5, "M3": 4, "M4": 3, "M5": 2}   # name: GPIO, active-HIGH. M1 = left tip ... M5 = right tip
+                 # (as worn); the band is wired right-to-left, so the GPIO order is reversed.
 MAX_MS = 1500    # hard cap on one ON period. Raise only after measuring motor current/heat.
 PWM_HZ = 250     # kept low on purpose: every switch-off stresses the module's driver
                  # (flyback diode unconfirmed), so fewer switches per second is gentler.

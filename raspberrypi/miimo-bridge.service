@@ -1,0 +1,17 @@
+[Unit]
+Description=Miimo vibration motor bridge (relay server <-> Pico over USB serial)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/demo-webapp
+# The token lives only in this file (root-owned, not in the repository): DEVICE_TOKEN=...
+EnvironmentFile=/etc/miimo/bridge.env
+ExecStart=/home/pi/demo-webapp/.venv/bin/python -u raspberrypi/bridge.py --url wss://miimo.damilab.cc/device --token ${DEVICE_TOKEN} --port /dev/serial/by-id/usb-MicroPython_Board_in_FS_mode_87d17537e452d4f8-if00
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
